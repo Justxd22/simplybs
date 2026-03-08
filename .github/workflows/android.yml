@@ -24,8 +24,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential golang python3 cmake make \
+          sudo apt-get install -y build-essential python3 cmake make \
             autoconf automake libtool pkg-config gperf
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
 
       - name: Build simplybs
         run: go build -o simplybs .
