@@ -23,6 +23,8 @@
         "steps": [
             "*:*-android*:mkdir -p $STAGING_DIR$NATIVEPREFIX",
             "*:*-android*:cp -a bin sysroot lib AndroidVersion.txt $STAGING_DIR$NATIVEPREFIX/",
+            "*:*-android*:cd $STAGING_DIR$NATIVEPREFIX/bin && if [ -L $BUILDLIB_HOST$API_LEVEL-clang ]; then cp --remove-destination $(readlink -f $BUILDLIB_HOST$API_LEVEL-clang) $BUILDLIB_HOST$API_LEVEL-clang; fi",
+            "*:*-android*:cd $STAGING_DIR$NATIVEPREFIX/bin && if [ -L $BUILDLIB_HOST$API_LEVEL-clang++ ]; then cp --remove-destination $(readlink -f $BUILDLIB_HOST$API_LEVEL-clang++) $BUILDLIB_HOST$API_LEVEL-clang++; fi",
             "*:*-android*:cd $STAGING_DIR$NATIVEPREFIX/bin && rm -f $BUILDLIB_HOST-ar && ln -s llvm-ar $BUILDLIB_HOST-ar",
             "*:*-android*:cd $STAGING_DIR$NATIVEPREFIX/bin && rm -f $BUILDLIB_HOST-clang && ln -s $BUILDLIB_HOST$API_LEVEL-clang $BUILDLIB_HOST-clang",
             "*:*-android*:cd $STAGING_DIR$NATIVEPREFIX/bin && rm -f $BUILDLIB_HOST-clang++ && ln -s $BUILDLIB_HOST$API_LEVEL-clang++ $BUILDLIB_HOST-clang++",
