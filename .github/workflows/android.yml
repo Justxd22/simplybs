@@ -6,105 +6,10 @@ on:
   pull_request:
     branches: [cyjan-wip-experiments]
   workflow_dispatch:
-    inputs:
-      ndk_artifact_url:
-        description: 'URL to monero-ndk-linux.tar.gz (leave empty to build from monero-ndk repo)'
-        required: false
-        default: ''
 
 jobs:
-  build-ndk:
-    name: Build monero-ndk from source
-    if: github.event.inputs.ndk_artifact_url == '' || github.event.inputs.ndk_artifact_url == null
-    runs-on: ubuntu-22.04
-    timeout-minutes: 180
-    steps:
-      - name: Checkout monero-ndk
-        uses: actions/checkout@v4
-        with:
-          repository: Justxd22/monero-ndk
-          ref: main
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build python3 python3-pip git build-essential lld
-
-      - name: Restore AOSP sources cache
-        id: cache-sources
-        uses: actions/cache/restore@v4
-        with:
-          path: sources/
-          key: aosp-sources-${{ hashFiles('config.sh') }}
-
-      - name: Fetch sources
-        run: make fetch
-
-      - name: Save AOSP sources cache
-        if: steps.cache-sources.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: sources/
-          key: aosp-sources-${{ hashFiles('config.sh') }}
-
-      - name: Restore LLVM build cache
-        id: cache-llvm
-        uses: actions/cache/restore@v4
-        with:
-          path: build/llvm-install/
-          key: llvm-build-${{ hashFiles('config.sh', 'scripts/02-build-llvm.sh') }}
-
-      - name: Build LLVM
-        run: make llvm
-
-      - name: Save LLVM build cache
-        if: steps.cache-llvm.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: build/llvm-install/
-          key: llvm-build-${{ hashFiles('config.sh', 'scripts/02-build-llvm.sh') }}
-
-      - name: Restore sysroot cache
-        id: cache-sysroot
-        uses: actions/cache/restore@v4
-        with:
-          path: output/sysroot/
-          key: sysroot-build-${{ hashFiles('config.sh', 'scripts/03-build-sysroot.sh', 'scripts/03a-generate-stubs.sh', 'scripts/03b-build-crt.sh', 'scripts/03c-build-libm.sh', 'scripts/03d-build-libc.sh') }}
-
-      - name: Build sysroot
-        run: make sysroot
-
-      - name: Save sysroot cache
-        if: steps.cache-sysroot.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: output/sysroot/
-          key: sysroot-build-${{ hashFiles('config.sh', 'scripts/03-build-sysroot.sh', 'scripts/03a-generate-stubs.sh', 'scripts/03b-build-crt.sh', 'scripts/03c-build-libm.sh', 'scripts/03d-build-libc.sh') }}
-
-      - name: Build runtimes + assemble
-        run: make runtimes && make assemble
-
-      - name: Verify
-        run: make verify
-
-      - name: Package release tarball
-        run: |
-          cd output
-          tar czf ../monero-ndk-linux.tar.gz .
-          cd ..
-          sha256sum monero-ndk-linux.tar.gz
-
-      - name: Upload NDK tarball
-        uses: actions/upload-artifact@v4
-        with:
-          name: monero-ndk-linux
-          path: monero-ndk-linux.tar.gz
-          retention-days: 7
-
   build-android:
     name: Build ${{ matrix.target }}
-    needs: [build-ndk]
-    if: always() && (needs.build-ndk.result == 'success' || needs.build-ndk.result == 'skipped')
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     strategy:
@@ -122,44 +27,12 @@ jobs:
           sudo apt-get install -y build-essential golang python3 cmake make \
             autoconf automake libtool pkg-config gperf
 
-      - name: Download NDK artifact (from build-ndk job)
-        if: needs.build-ndk.result == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: monero-ndk-linux
-          path: /tmp/ndk-artifact
-
-      - name: Download NDK from URL (manual dispatch)
-        if: needs.build-ndk.result == 'skipped' && github.event.inputs.ndk_artifact_url != ''
-        run: |
-          mkdir -p /tmp/ndk-artifact
-          curl -L -o /tmp/ndk-artifact/monero-ndk-linux.tar.gz "${{ github.event.inputs.ndk_artifact_url }}"
-
-      - name: Prepare NDK tarball for simplybs
-        run: |
-          # simplybs downloads sources into .buildlib/source/
-          # We need to pre-place the tarball where simplybs expects it
-          NDK_SHA256=$(sha256sum /tmp/ndk-artifact/monero-ndk-linux.tar.gz | cut -d' ' -f1)
-          echo "NDK tarball SHA256: $NDK_SHA256"
-          echo "NDK_SHA256=$NDK_SHA256" >> $GITHUB_ENV
-
-          # Update the sha256 in android_ndk.json to match actual tarball
-          sed -i "s/0000000000000000000000000000000000000000000000000000000000000000/$NDK_SHA256/" packages/native/android_ndk.json
-
-          # Pre-place the tarball where simplybs will look for it
-          SIMPLYBS_SOURCE_DIR=".buildlib/source/github.com/Justxd22/monero-ndk/releases/download/v1.0.0"
-          mkdir -p "$SIMPLYBS_SOURCE_DIR"
-          cp /tmp/ndk-artifact/monero-ndk-linux.tar.gz "$SIMPLYBS_SOURCE_DIR/"
-
-          echo "=== android_ndk.json ==="
-          cat packages/native/android_ndk.json
-
       - name: Build simplybs
         run: go build -o simplybs .
 
       - name: Build openssl for ${{ matrix.target }}
         run: |
-          ./simplybs -host ${{ matrix.target }} -package openssl -build 2>&1 | tail -100
+          ./simplybs -host ${{ matrix.target }} -package openssl -build
 
       - name: Verify openssl built
         run: |
@@ -168,13 +41,11 @@ jobs:
           find "$ENV_DIR" -name "libssl*" -o -name "libcrypto*" 2>/dev/null || echo "No openssl libs found"
           find "$ENV_DIR" -name "opensslv.h" 2>/dev/null || echo "No openssl headers found"
 
-      - name: Build all Android dependencies
+      - name: Build remaining Android dependencies
         run: |
-          echo "=== Building remaining packages for ${{ matrix.target }} ==="
           for pkg in sodium zeromq unbound boost@1_83_0; do
             echo "--- Building $pkg ---"
-            ./simplybs -host ${{ matrix.target }} -package $pkg -build 2>&1 | tail -30
-            echo ""
+            ./simplybs -host ${{ matrix.target }} -package $pkg -build
           done
 
       - name: Summary
@@ -184,6 +55,8 @@ jobs:
           echo "Built packages:"
           find .buildlib -name "*.tar.gz" -path "*/built/*" | sort
           echo ""
-          echo "Environment:"
-          ls -la .buildlib/env/lib/ 2>/dev/null | head -20 || echo "No env/lib"
-          ls -la .buildlib/env/native/bin/ 2>/dev/null | head -20 || echo "No env/native/bin"
+          echo "Environment libs:"
+          ls .buildlib/env/lib/ 2>/dev/null | head -20 || echo "No env/lib"
+          echo ""
+          echo "NDK tools:"
+          ls .buildlib/env/native/bin/ 2>/dev/null | head -20 || echo "No env/native/bin"
