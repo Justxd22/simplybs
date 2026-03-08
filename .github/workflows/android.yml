@@ -39,6 +39,18 @@ jobs:
         run: |
           ./simplybs -host ${{ matrix.target }} -package openssl -build
 
+      - name: Debug NDK tarball contents
+        if: always()
+        run: |
+          echo "=== NDK native tarball contents (clang/ar/ranlib) ==="
+          tar tvf .buildlib/linux_amd64/built/native_android_ndk*_native.tar.gz 2>/dev/null | grep -E 'clang|ranlib|\-ar' || echo "No NDK native tarball found"
+          echo ""
+          echo "=== native/_ tarball contents (clang/ar/ranlib) ==="
+          tar tvf .buildlib/linux_amd64/built/native__*_native.tar.gz 2>/dev/null | grep -E 'clang|ranlib|\-ar' || echo "No _ native tarball found"
+          echo ""
+          echo "=== Live env/native/bin (clang/ar/ranlib) ==="
+          ls -la .buildlib/env/native/bin/ 2>/dev/null | grep -E 'clang|ranlib|\-ar' || echo "No env/native/bin"
+
       - name: Verify openssl built
         run: |
           ENV_DIR=".buildlib/env"
