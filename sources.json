@@ -999,6 +999,11 @@
             "refs": [
                 "13a831d76467c88f9e79f9804e2471137ec05331"
             ]
+        },
+        "https://github.com/justxd22/monero-ndk": {
+            "refs": [
+                "f0894a6c06fc53542ab5505088f0a2feb5f14f4d"
+            ]
         }
     }
 }
