@@ -10,7 +10,6 @@
         }
     ],
     "dependencies": [
-        "*:*:native/_",
         "*:*:native/make",
         "*:*:native/cmake",
         "*:*:native/ninja",
