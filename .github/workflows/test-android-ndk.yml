@@ -1,0 +1,157 @@
+name: test-android-ndk
+
+# Builds the native/android_ndk package (monero-ndk from source) with simplybs,
+#     go build -o simplybs .
+#     ./simplybs --host aarch64-linux-android --package native/android_ndk --download
+#     ./simplybs --host aarch64-linux-android --package native/android_ndk --build
+#
+# reproduce locally:
+#
+#     docker run --rm -v "$PWD":/work -w /work golang:1.24-bookworm bash -lc '
+#       apt-get update && apt-get install -y --no-install-recommends \
+#         xz-utils bzip2 file patch python3 &&
+#       go build -o simplybs . &&
+#       ./simplybs --host aarch64-linux-android --package native/android_ndk --download &&
+#       ./simplybs --host aarch64-linux-android --package native/android_ndk --build'
+#
+# Caching is incremental: a snapshot is saved after each big step (and always,
+# even if a later step fails). simplybs skips any package whose built archive is
+# already restored, so a failure deep in the build doesn't redo earlier work.
+
+on:
+  push:
+    branches: [ci/test-android-ndk]
+  workflow_dispatch:
+    inputs:
+      host:
+        description: Target host triple
+        default: aarch64-linux-android
+        type: choice
+        options:
+          - aarch64-linux-android
+          - x86_64-linux-android
+          - armv7a-linux-androideabi
+
+concurrency:
+  group: test-android-ndk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    container:
+      image: golang:1.24-bookworm
+    env:
+      HOST: ${{ github.event.inputs.host || 'aarch64-linux-android' }}
+      # Keep Go's caches inside the workspace so actions/cache can persist them.
+      GOCACHE: ${{ github.workspace }}/.cache/go-build
+      GOMODCACHE: ${{ github.workspace }}/.cache/gomod
+      GOFLAGS: -mod=mod
+      # simplybs keys its data dir by GOOS_GOARCH; the runner is linux_amd64.
+      DATA: .buildlib/linux_amd64
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tools the golang image doesn't already ship that simplybs shells out to
+      # for downloading/extracting sources. (git, ca-certificates, curl, gcc,
+      # tar, gzip are already present in golang:bookworm.)
+      - name: Install extra host tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends xz-utils bzip2 file patch python3
+          rm -rf /var/lib/apt/lists/*
+
+      # ---------- simplybs binary ----------
+      - name: Restore Go cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .cache/go-build
+            .cache/gomod
+          key: go-${{ hashFiles('go.sum') }}
+          restore-keys: go-
+
+      - name: Build simplybs
+        run: go build -o simplybs .
+
+      - name: Save Go cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .cache/go-build
+            .cache/gomod
+          key: go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+
+      # ---------- download sources ----------
+      - name: Restore sources cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.DATA }}/source
+          key: src-${{ env.HOST }}-
+          restore-keys: |
+            src-${{ env.HOST }}-
+            src-
+
+      - name: Download sources
+        run: ./simplybs --host "$HOST" --package native/android_ndk --download
+
+      - name: Check sources present
+        if: always()
+        id: chk_src
+        run: |
+          if [ -n "$(ls -A "$DATA/source" 2>/dev/null)" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save sources cache
+        if: always() && steps.chk_src.outputs.ok == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.DATA }}/source
+          key: src-${{ env.HOST }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # ---------- build (deps + android_ndk) ----------
+      - name: Restore built-packages cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.DATA }}/built
+          key: built-${{ env.HOST }}-
+          restore-keys: |
+            built-${{ env.HOST }}-
+            built-
+
+      - name: Build android_ndk
+        run: ./simplybs --host "$HOST" --package native/android_ndk --build
+
+      - name: Check built packages present
+        if: always()
+        id: chk_built
+        run: |
+          if [ -n "$(ls -A "$DATA/built" 2>/dev/null)" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save built-packages cache
+        if: always() && steps.chk_built.outputs.ok == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.DATA }}/built
+          key: built-${{ env.HOST }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # ---------- publish ----------
+      - name: Upload NDK artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-ndk-${{ env.HOST }}
+          path: ${{ env.DATA }}/built/*android_ndk*.tar.gz
+          if-no-files-found: ignore
