@@ -91,14 +91,14 @@ jobs:
           key: go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
 
       # ---------- download sources ----------
+      # simplybs stores source bundles in .buildlib/source (host-agnostic; no
+      # GOOS_GOARCH segment), unlike built archives which live under DATA.
       - name: Restore sources cache
         uses: actions/cache/restore@v4
         with:
-          path: ${{ env.DATA }}/source
-          key: src-${{ env.HOST }}-
-          restore-keys: |
-            src-${{ env.HOST }}-
-            src-
+          path: .buildlib/source
+          key: src-
+          restore-keys: src-
 
       - name: Download sources
         run: ./simplybs --host "$HOST" --package native/android_ndk --download
@@ -107,7 +107,7 @@ jobs:
         if: always()
         id: chk_src
         run: |
-          if [ -n "$(ls -A "$DATA/source" 2>/dev/null)" ]; then
+          if [ -n "$(ls -A .buildlib/source 2>/dev/null)" ]; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "ok=false" >> "$GITHUB_OUTPUT"
@@ -117,8 +117,8 @@ jobs:
         if: always() && steps.chk_src.outputs.ok == 'true'
         uses: actions/cache/save@v4
         with:
-          path: ${{ env.DATA }}/source
-          key: src-${{ env.HOST }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .buildlib/source
+          key: src-${{ github.run_id }}-${{ github.run_attempt }}
 
       # ---------- build (deps + android_ndk) ----------
       - name: Restore built-packages cache
