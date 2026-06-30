@@ -56,6 +56,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Trust workspace for git
+        run: git config --global --add safe.directory '*'
+
       # Tools the golang image doesn't already ship that simplybs shells out to
       # for downloading/extracting sources. (git, ca-certificates, curl, gcc,
       # tar, gzip are already present in golang:bookworm.)
