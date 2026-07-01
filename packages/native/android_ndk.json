@@ -65,10 +65,17 @@
     ],
     "dependencies": [
         "*:*-android*:native/_/_",
+        "*:*-android*:native/bash",
+        "*:*-android*:native/coreutils",
         "*:*-android*:native/make",
         "*:*-android*:native/cmake",
         "*:*-android*:native/ninja",
-        "*:*-android*:native/python@3.11"
+        "*:*-android*:native/python@3.11",
+        "*:*-android*:native/sed",
+        "*:*-android*:native/grep",
+        "*:*-android*:native/gawk",
+        "*:*-android*:native/findutils",
+        "*:*-android*:native/file"
     ],
     "build": {
         "env": [
