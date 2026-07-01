@@ -1,0 +1,60 @@
+name: Test rust-std cross-compile
+
+on:
+  push:
+    branches: [ci/test-rust-std]
+  workflow_dispatch:
+
+jobs:
+  build-rust-std:
+    name: rust-std ${{ matrix.target }}
+    # easybs bootstrap binaries (clang21) require GLIBC_2.38, so use 24.04 (glibc 2.39).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        # Add x86_64-linux-android / armv7a-linux-androideabi once green.
+        target: [aarch64-linux-android]
+
+    steps:
+      - name: Checkout simplybs
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3 cmake make \
+            autoconf automake libtool pkg-config gperf
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build simplybs
+        run: go build -o simplybs .
+
+      - name: Build rust-std for ${{ matrix.target }}
+        run: |
+          ./simplybs -host ${{ matrix.target }} -package rust-std -build
+
+      - name: Verify target std installed
+        run: |
+          ENV_DIR=".buildlib/env"
+          echo "=== rustlib dirs ==="
+          find "$ENV_DIR" -type d -path "*lib/rustlib/*" -maxdepth 8 2>/dev/null | sort
+          echo "=== std rlibs for ${{ matrix.target }} ==="
+          find "$ENV_DIR" -name "libstd-*.rlib" 2>/dev/null || echo "No std rlib found"
+
+      - name: Build rust-hello-world for ${{ matrix.target }}
+        run: |
+          ./simplybs -host ${{ matrix.target }} -package rust-hello-world -build
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "=== Built package tarballs ==="
+          find .buildlib -name "*.tar.gz" -path "*/built/*" | sort
+          echo "=== rust-hello-world binary ==="
+          find .buildlib -name "rust-hello-world" 2>/dev/null || echo "not found"

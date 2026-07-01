@@ -1,0 +1,15 @@
+--- a/src/trans/codegen_c.cpp
++++ b/src/trans/codegen_c.cpp
+@@ -5588,7 +5588,11 @@
+                         if( pe->spec.opt_Explicit() )
+                         {
+                             // Ignore, handled explicitly above
+-                            if( pe->input ) {
++                            // An inout explicit-register operand is already emitted as a "+r"
++                            // output; also tying it as a "0" input is redundant and rejected by
++                            // clang ("invalid input constraint '0'"). Only emit it as an input
++                            // when input-only, matching the non-explicit case below.
++                            if( pe->input && !pe->output ) {
+                                 inputs.push_back(&se.params[i]);
+                             }
+                         }

@@ -33,6 +33,7 @@
             "linux_arm64:*:RUSTC_TARGET=aarch64-unknown-linux-gnu"
         ],
         "steps": [
+            "*:*:patch -p1 < $PATCH_DIR/rust/codegen_c_asm_clang.patch",
             "*:*:sed -i.bak 's/^make$/make $@/' build-1.90.0.sh",
             "darwin_arm64:*:sed -i.bak 's/^[[:space:]]*RUSTC_TARGET ?= x86_64-apple-darwin/RUSTC_TARGET ?= aarch64-apple-darwin/' run_rustc/Makefile",
             "linux_arm64:*:sed -i.bak 's/^[[:space:]]*RUSTC_TARGET ?= x86_64-unknown-linux-gnu/RUSTC_TARGET ?= aarch64-unknown-linux-gnu/' run_rustc/Makefile",
