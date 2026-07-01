@@ -1,0 +1,16 @@
+--- a/src/trans/codegen_c.cpp
++++ b/src/trans/codegen_c.cpp
+@@ -1303,6 +1303,13 @@
+                     args.push_back( a.c_str() );
+                 }
+                 args.push_back("-Wno-psabi");   // Suppress "note: the ABI for passing parameters with 128-byte alignment has changed in GCC 4.6"
++                // Enable inline 16-byte atomics (cmpxchg16b) on x86_64. Without -mcx16, clang
++                // lowers the 128-bit atomics in libcore to non-lock-free libcalls, which
++                // miscompiles the mrustc-bootstrapped rustc (segfault on first run).
++                if( Target_GetCurSpec().m_arch.m_name == "x86_64" )
++                {
++                    args.push_back("-mcx16");
++                }
+                 switch(opt.opt_level)
+                 {
+                 case 0: break;
