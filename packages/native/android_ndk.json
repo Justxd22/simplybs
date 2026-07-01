@@ -5,7 +5,7 @@
     "download": [
         {
             "kind": "git",
-            "sha256": "f3508d4aa2d1345371ead9d9bbb035c5031f32b5",
+            "sha256": "441a59859ea8c80447eca03f2c24c243d934c8ab",
             "url": "https://github.com/justxd22/monero-ndk"
         },
         {
@@ -75,7 +75,8 @@
         "*:*-android*:native/grep",
         "*:*-android*:native/gawk",
         "*:*-android*:native/findutils",
-        "*:*-android*:native/file"
+        "*:*-android*:native/file",
+        "*:*-android*:native/patch"
     ],
     "build": {
         "env": [
