@@ -69,6 +69,15 @@ jobs:
           apt-get install -y --no-install-recommends xz-utils bzip2 file patch python3
           rm -rf /var/lib/apt/lists/*
 
+      # simplybs builds with a from-scratch environment and some bootstrap
+      # packages (e.g. native/coreutils) refuse to ./configure as root. The
+      # container runs as root, so run the actual build as an unprivileged user
+      # — matching how the toolchain is meant to be built.
+      - name: Create non-root build user
+        run: |
+          useradd -m -u 1001 builder
+          runuser -u builder -- env HOME=/home/builder git config --global --add safe.directory '*'
+
       # ---------- simplybs binary ----------
       - name: Restore Go cache
         uses: actions/cache/restore@v4
@@ -102,7 +111,11 @@ jobs:
           restore-keys: src-
 
       - name: Download sources
-        run: ./simplybs --host "$HOST" --package native/android_ndk --download
+        run: |
+          mkdir -p .buildlib
+          chown -R builder:builder .buildlib
+          runuser -u builder -- env HOME=/home/builder \
+            ./simplybs --host "$HOST" --package native/android_ndk --download
 
       - name: Check sources present
         if: always()
@@ -132,7 +145,11 @@ jobs:
             built-
 
       - name: Build android_ndk
-        run: ./simplybs --host "$HOST" --package native/android_ndk --build
+        run: |
+          mkdir -p .buildlib
+          chown -R builder:builder .buildlib
+          runuser -u builder -- env HOME=/home/builder \
+            ./simplybs --host "$HOST" --package native/android_ndk --build
 
       - name: Check built packages present
         if: always()
