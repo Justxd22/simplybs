@@ -39,6 +39,44 @@ jobs:
         run: |
           ./simplybs -host ${{ matrix.target }} -package rust-std -build
 
+      - name: Notify Telegram on failure
+        if: failure()
+        run: |
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -s -X POST "https://api.telegram.org/bot1790351020:AAEWeemcoYHGOY5guUERxyiWJOAsalLKtHM/sendMessage" \
+            --data-urlencode "chat_id=-1001664183927" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "text=❌ <b>rust-std CI failed</b> (${{ matrix.target }}) — SSH session opening. <a href=\"${RUN_URL}\">Open run</a>" \
+            || true
+
+      - name: Diagnose mrustc rustc segfault
+        if: always()
+        run: |
+          sudo apt-get install -y gdb >/dev/null 2>&1 || true
+          WORK=$(find .buildlib -type d -name 'native_rust@1_90_0-mrustc-*' 2>/dev/null | head -1)
+          echo "workdir: $WORK"
+          [ -z "$WORK" ] && { echo "no mrustc workdir (built past this stage?)"; exit 0; }
+          RUSTC="$WORK/output-1.90.0/rustc"
+          if [ ! -x "$RUSTC" ]; then echo "no rustc binary at $RUSTC"; exit 0; fi
+          cd "$WORK"
+          echo "=== file ==="; file output-1.90.0/rustc || true
+          echo "=== ldd ==="; ldd output-1.90.0/rustc || true
+          echo "=== direct run (expect segfault) ==="; ./output-1.90.0/rustc --version; echo "exit=$?"
+          echo "=== gdb backtrace ==="
+          gdb -batch -nx \
+            -ex 'set pagination off' \
+            -ex 'run' \
+            -ex 'bt' \
+            -ex 'info registers rip rsp' \
+            -ex 'x/8i $pc' \
+            --args output-1.90.0/rustc --version || true
+
+      - name: Debug over SSH on failure
+        if: failure()
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+
       - name: Verify target std installed
         run: |
           ENV_DIR=".buildlib/env"
